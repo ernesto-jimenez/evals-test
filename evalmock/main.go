@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -70,6 +71,8 @@ func main() {
 }
 
 func runOpenAIEval(r *http.Request, w http.ResponseWriter) error {
+	ctx := r.Context()
+
 	var model string
 
 	err := json.NewDecoder(r.Body).Decode(&model)
@@ -83,8 +86,8 @@ func runOpenAIEval(r *http.Request, w http.ResponseWriter) error {
 	}
 	defer os.Remove(output.Name())
 
-	exec := exec.Command("./eval.sh", model)
-	exec.Dir = "/home/unweave-openai-evals"
+	exec := exec.CommandContext(ctx, "./eval.sh", model)
+	// exec.Dir = "/home/unweave-openai-evals"
 	exec.Env = append(os.Environ(), "OAIEVAL_RECORD_PATH="+output.Name())
 	exec.Stdout = os.Stdout
 	exec.Stderr = os.Stderr
@@ -94,10 +97,64 @@ func runOpenAIEval(r *http.Request, w http.ResponseWriter) error {
 		return fmt.Errorf("error running eval: %w", err)
 	}
 
-	_, err = io.Copy(w, io.TeeReader(output, os.Stdout))
+	var report struct {
+		FinalReport map[string]any `json:"final_report"`
+	}
+	reader := NewReader(io.TeeReader(output, os.Stdout))
+
+	for reader.ReadSingleLine(&report) {
+		if report.FinalReport == nil {
+			continue
+		}
+
+		err = json.NewEncoder(w).Encode(report)
+		if err != nil {
+			return fmt.Errorf("error encoding report: %w", err)
+		}
+
+		return nil
+	}
+
+	err = reader.Err()
 	if err != nil {
-		return fmt.Errorf("error copying output: %w", err)
+		return fmt.Errorf("error finding output: %w", err)
 	}
 
 	return nil
+}
+
+type Reader struct {
+	err     error
+	r       io.Reader
+	scanner *bufio.Scanner
+}
+
+func NewReader(r io.Reader) Reader {
+	scanner := bufio.NewScanner(r)
+	scanner.Split(bufio.ScanLines)
+
+	return Reader{
+		r:       r,
+		scanner: scanner,
+	}
+}
+
+func (r Reader) ReadSingleLine(output interface{}) bool {
+	ok := r.scanner.Scan()
+	if !ok {
+		r.err = r.scanner.Err()
+		return false
+	}
+
+	err := json.Unmarshal(r.scanner.Bytes(), output)
+	if err != nil {
+		r.err = fmt.Errorf("error decoding json: %w", err)
+		return false
+	}
+
+	return true
+}
+
+func (r Reader) Err() error {
+	return r.err
 }
