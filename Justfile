@@ -15,7 +15,7 @@ terminate: exec-id
   cat .exec_id | grep -v "null" | while read id; do yes | {{unweave}} terminate $id; done
 
 create-exec: terminate
-  {{unweave}} exec --no-copy -i ghcr.io/ernesto-jimenez/evals-test:main -- "oaieval -h"
+  {{unweave}} exec --no-copy --port 8080 -i ghcr.io/ernesto-jimenez/evals-test:main -- eval-server :8080
   just exec-id
 
 create-endpoint: create-exec
