@@ -84,6 +84,7 @@ func runOpenAIEval(r *http.Request, w http.ResponseWriter) error {
 	defer os.Remove(output.Name())
 
 	exec := exec.Command("./eval.sh", model)
+	exec.Dir = "/home/unweave-openai-evals"
 	exec.Env = append(os.Environ(), "OAIEVAL_RECORD_PATH="+output.Name())
 	exec.Stdout = os.Stdout
 	exec.Stderr = os.Stderr

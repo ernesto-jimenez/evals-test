@@ -11,8 +11,8 @@ login:
 set-up: login
   if [ ! -d .unweave ]; then {{unweave}} link {{username}}/{{project}}; fi
 
-terminate: exec-id
-  cat .exec_id | grep -v "null" | while read id; do yes | {{unweave}} terminate $id; done
+terminate:
+  {{unweave}} ls --json | jq -r '.[] | .id' | grep -v "null" | xargs {{unweave}} terminate
 
 create-exec: terminate
   {{unweave}} exec --no-copy --port 8080 -i ghcr.io/ernesto-jimenez/evals-test:main -- eval-server :8080
