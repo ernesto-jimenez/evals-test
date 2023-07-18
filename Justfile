@@ -19,18 +19,19 @@ create-exec:
   {{unweave}} exec --json --no-copy --port 8080 -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} -- eval-server :8080 | jq -r .id > .exec_id
 
 create-endpoint:
-  {{unweave}} deploy --debug --cmd "eval-server :8080" -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} --json | jq -r .endpoint.id > .endpoint_id
+  {{unweave}} deploy --cmd "eval-server :8080" -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} --json | jq -r .endpoint.id > .endpoint_id
 
 create-eval: create-exec
   {{unweave}} eval new `cat .exec_id` --json | jq -r .id > .eval_id
 
 attach-eval: create-eval create-endpoint
-  {{unweave}} --debug endpoint attach-eval `cat .endpoint_id` `cat .eval_id`
+  {{unweave}} endpoint attach-eval `cat .endpoint_id` `cat .eval_id`
 
-check: terminate attach-eval check-only wait-all
+check: terminate attach-eval wait-all check-only
 
 check-only:
-  {{unweave}} --debug endpoint check `cat .endpoint_id`
+  {{unweave}} endpoint check `cat .endpoint_id` --json | jq -r .checkID > .check_id
+  cat .check_id
 
 endpoints:
   {{unweave}} endpoint ls

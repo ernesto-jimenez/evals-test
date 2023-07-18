@@ -11,6 +11,8 @@ import (
 	"os/exec"
 )
 
+const WORKDIR = "/home/unweave-openai-evals"
+
 func main() {
 	log.Println("eval mock on addr", os.Args)
 	log.Println(http.ListenAndServe(
@@ -87,7 +89,10 @@ func runOpenAIEval(r *http.Request, w http.ResponseWriter) error {
 	defer os.Remove(output.Name())
 
 	exec := exec.CommandContext(ctx, "./eval.sh", model)
-	// exec.Dir = "/home/unweave-openai-evals"
+	exec.Dir = WORKDIR
+	if _, err := os.Stat(exec.Dir); os.IsNotExist(err) {
+		exec.Dir = "."
+	}
 	exec.Env = append(os.Environ(), "OAIEVAL_RECORD_PATH="+output.Name())
 	exec.Stdout = os.Stdout
 	exec.Stderr = os.Stderr
