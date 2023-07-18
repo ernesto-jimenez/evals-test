@@ -1,7 +1,12 @@
 FROM python:3.11
 
-WORKDIR /home/oaieval
+RUN pip install pipenv
 
-COPY ./openai-evals /home/oaieval
+WORKDIR /home/unweave-openai-evals
+ENV PYTHONPATH=/home/unweave-openai-evals
 
-RUN pip install -e .
+COPY . /home/unweave-openai-evals
+
+RUN pipenv install
+
+CMD [ "./eval.sh" ]

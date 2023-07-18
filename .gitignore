@@ -1,3 +1,4 @@
 .env
 .unweave
 .*_id
+output.jsonl
