@@ -1,0 +1,3 @@
+[submodule "openai-evals"]
+	path = openai-evals
+	url = https://github.com/openai/evals.git
