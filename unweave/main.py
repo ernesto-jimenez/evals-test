@@ -17,7 +17,7 @@ from evals.eval import Eval
 from evals.prompt.base import (OpenAICreateChatPrompt, OpenAICreatePrompt,
                                Prompt)
 from evals.registry import Registry
-from fastapi import Body, FastAPI
+from fastapi import Body, Header, FastAPI
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -45,12 +45,15 @@ async def dataset(eval: str = "test-match"):
 
 
 @app.post("/run")
-async def run_model(request: Annotated[Dict[str, Any], Body(embedded=True)]):
+async def run_model(
+        request: Annotated[Dict[str, Any], Body(embedded=True)],
+        x_unweave_target_endpoint_url: Annotated[str | None, Header()] = None
+        ):
     print(f"request: {request}")
     eval = str(request["eval"])
     del request["eval"]
 
-    endpointURL = request.get("endpointURL", "")
+    endpointURL = x_unweave_target_endpoint_url
     sample = request
 
     print(f"endpointURL: {endpointURL}")
@@ -58,7 +61,11 @@ async def run_model(request: Annotated[Dict[str, Any], Body(embedded=True)]):
     print(f"sample: {sample}")
 
     args = new_args(eval)
+
+    # TODO: Replace for a completion function that calls
+    # the endpoint x_unweave_target_endpoint_url
     fn = CompletionFnFake()
+
     result = run(args, fn, sample)
 
     print(f"result: {result}")
