@@ -11,13 +11,14 @@ import evals.api
 import evals.base
 import evals.record
 import openai
-from evals.api import CompletionFn, CompletionResult, DummyCompletionResult
+from evals.api import CompletionFn, CompletionResult, DummyCompletionResult, DummyCompletionFn
 from evals.base import CompletionFnSpec
 from evals.eval import Eval
 from evals.prompt.base import (OpenAICreateChatPrompt, OpenAICreatePrompt,
                                Prompt)
 from evals.registry import Registry
 from fastapi import FastAPI
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -189,23 +190,37 @@ app = FastAPI()
 async def startup_event():
     init()
 
+@app.get("/")
+async def manifest():
+    return {
+            "runURL": "/",
+            }
+
 @app.get("/dataset")
 async def dataset(eval: str = "test-match"):
     args = new_args(eval)
-    fn = CompletionFnFake()
+    fn = DummyCompletionFn()
     samples = gather_samples(args, fn)
-    # inputs = [{"input": prompt} for prompt in fn.prompts]
-    return { "data": samples }
+    inputs = [{"input": sample} for sample in samples]
+    return { "data": inputs }
+
+class RunRequest(BaseModel):
+    Input: Any
+    EndpointURL: str | None
 
 @app.post("/run")
-async def run_model(sample: Dict[str, Any]):
-    eval = str(sample["eval"])
-    del sample["eval"]
+async def run_model(request: RunRequest):
+    eval = str(request.Input["eval"])
+    del request.Input["eval"]
+
+    print(f"endpointURL: {request.EndpointURL}")
     print(f"eval: {eval}")
-    print(f"sample: {sample}")
+    print(f"sample: {request.Input}")
+
     args = new_args(eval)
     fn = CompletionFnFake()
-    result = run(args, fn, sample)
+    result = run(args, fn, request.Input)
+
     print(f"result: {result}")
 
     try:
@@ -214,6 +229,13 @@ async def run_model(sample: Dict[str, Any]):
         return result
     except ValueError:
         return f"RESULT: {result}"
+
+@app.post("/assert")
+async def assert_response(data: Any):
+    print(f"assert data: {data}")
+    return {
+            "result": "unimplemented",
+            }
 
 class CompletionFnFake(CompletionFn):
     def __init__(self):

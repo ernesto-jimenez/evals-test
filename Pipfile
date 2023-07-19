@@ -5,6 +5,9 @@ name = "pypi"
 
 [packages]
 evals = {editable = true, path = "./openai-evals"}
+fastapi = "*"
+uvicorn = {version = "*", extras = ["standard"]}
+pydantic = "*"
 
 [dev-packages]
 pylint = "*"
