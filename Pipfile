@@ -8,6 +8,7 @@ evals = {editable = true, path = "./openai-evals"}
 
 [dev-packages]
 pylint = "*"
+rope = "*"
 
 [requires]
 python_version = "3.11"

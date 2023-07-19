@@ -2,8 +2,9 @@ import argparse
 import logging
 import os
 import shlex
+import json
 import sys
-from typing import Any, Mapping, Optional, Union, cast
+from typing import Any, Mapping, Optional, Union, cast, Dict
 
 import evals
 import evals.api
@@ -52,7 +53,6 @@ class OaiEvalArguments:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
-    eval: str
     extra_eval_params: str = ""
     max_samples: Optional[int] = None
     visible: Optional[bool] = None
@@ -64,9 +64,7 @@ class OaiEvalArguments:
     dry_run: bool = False
     dry_run_logging: bool = True
 
-def run(completion_fn: CompletionFn, registry: Optional[Registry] = None) -> str:
-    args = new_args()
-
+def setup(args: OaiEvalArguments, completion_fn: CompletionFn, registry: Optional[Registry] = None) -> (Eval, evals.record.RecorderBase):
     visible = args.visible if args.visible is not None else (args.max_samples is None)
 
     if args.max_samples is not None:
@@ -107,7 +105,7 @@ def run(completion_fn: CompletionFn, registry: Optional[Registry] = None) -> str
     )
 
     recorder: evals.record.RecorderBase
-    recorder = evals.record.DummyRecorder(run_spec, log=True)
+    recorder = evals.record.DummyRecorder(run_spec, log=False)
 
     run_url = f"{run_spec.run_id}"
     logger.info(_purple(f"Run started: {run_url}"))
@@ -143,20 +141,43 @@ def run(completion_fn: CompletionFn, registry: Optional[Registry] = None) -> str
         registry=registry,
         **extra_eval_params,
     )
+    return (eval, recorder)
+
+def gather_samples(args: OaiEvalArguments, completion_fn: CompletionFn, registry: Optional[Registry] = None) -> list[Any]:
+    eval, recorder = setup(args, completion_fn, registry)
+    samples = list()
+    # original_method = eval.eval_sample
+    def other_method(sample, rand):
+        samples.append({**sample, "eval": args.eval})
+        # return original_method(sample, rand)
+
+    eval.eval_sample = other_method
+    eval.run(recorder)
+
+    return samples
+
+def run(args: OaiEvalArguments, completion_fn: CompletionFn, sample: Any, registry: Optional[Registry] = None) -> Any:
+    eval, recorder = setup(args, completion_fn, registry)
+    original_method = eval.eval_all_samples
+    def stub(
+        recorder: evals.record.RecorderBase,
+        samples,
+        show_progress=True,
+        record_raw_sample=True,
+        **_kwargs: Any,
+    ):
+        return original_method(recorder, [sample], show_progress, record_raw_sample)
+
+    eval.eval_all_samples = stub
     result = eval.run(recorder)
     recorder.record_final_report(result)
 
-    return run_spec.run_id
+    return result
 
-def new_args() -> OaiEvalArguments:
-    return OaiEvalArguments(
-            eval=os.environ.get("EVAL", "test-match"),
-            )
+def new_args(eval: str) -> OaiEvalArguments:
+    return OaiEvalArguments(eval=eval)
 
 def init() -> None:
-    args = new_args()
-    print(args.eval)
-    print(args.visible)
     logging.basicConfig(
         format="[%(asctime)s] [%(filename)s:%(lineno)d] %(message)s",
         level=logging.INFO,
@@ -169,15 +190,35 @@ async def startup_event():
     init()
 
 @app.get("/dataset")
-async def root():
+async def dataset(eval: str = "test-match"):
+    args = new_args(eval)
     fn = CompletionFnFake()
-    run(fn)
-    return {
-            "data": [{"input": prompt} for prompt in fn.prompts]
-            }
+    samples = gather_samples(args, fn)
+    # inputs = [{"input": prompt} for prompt in fn.prompts]
+    return { "data": samples }
+
+@app.post("/run")
+async def run_model(sample: Dict[str, Any]):
+    eval = str(sample["eval"])
+    del sample["eval"]
+    print(f"eval: {eval}")
+    print(f"sample: {sample}")
+    args = new_args(eval)
+    fn = CompletionFnFake()
+    result = run(args, fn, sample)
+    print(f"result: {result}")
+
+    try:
+        print(json.dumps(result, allow_nan=False))
+        print("encoded")
+        return result
+    except ValueError:
+        return f"RESULT: {result}"
 
 class CompletionFnFake(CompletionFn):
-    prompts: list[dict[str, Any]] = []
+    def __init__(self):
+        self.prompts: list[dict[str, Any]] = []
+
     def __call__(
         self,
         prompt: Union[str, Prompt, OpenAICreateChatPrompt, OpenAICreatePrompt],
