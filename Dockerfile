@@ -15,10 +15,10 @@ FROM python:3.11
 
 RUN pip install pipenv
 
-WORKDIR /home/unweave-openai-evals
-ENV PYTHONPATH=/home/unweave-openai-evals
+WORKDIR /root
+ENV PYTHONPATH=/root
 
-COPY . /home/unweave-openai-evals
+COPY . /root
 COPY --from=builder /home/unweave-openai-evals/eval-server /usr/local/bin/eval-server
 
 RUN pipenv install
