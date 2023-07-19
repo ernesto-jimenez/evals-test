@@ -18,9 +18,6 @@ terminate:
 create-exec:
   {{unweave}} exec --json --no-copy --port 8080 -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} --port 8080 -- pipenv run uvicorn unweave.main:app --port 8080 --host 0.0.0.0 | jq -r .id > .exec_id
 
-create-exec-with-image:
-  {{unweave}} exec --json --no-copy --port 8080 -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} -- eval-server :8080 | jq -r .id > .exec_id
-
 create-endpoint:
   {{unweave}} deploy --cmd "eval-server :8080" -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} --json | jq -r .endpoint.id > .endpoint_id
 

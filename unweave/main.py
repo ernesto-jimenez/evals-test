@@ -1,21 +1,23 @@
-import logging
-import shlex
 import json
+import logging
+import math
+import shlex
 import sys
-from typing import Any, Mapping, Optional, Union
+from typing import Annotated, Any, Mapping, Optional, Union
 
 import evals
 import evals.api
 import evals.base
 import evals.record
 import openai
-from evals.api import CompletionFn, CompletionResult, DummyCompletionResult, DummyCompletionFn
+from evals.api import (CompletionFn, CompletionResult, DummyCompletionFn,
+                       DummyCompletionResult)
 from evals.base import CompletionFnSpec
 from evals.eval import Eval
 from evals.prompt.base import (OpenAICreateChatPrompt, OpenAICreatePrompt,
                                Prompt)
 from evals.registry import Registry
-from fastapi import FastAPI
+from fastapi import Body, FastAPI
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -43,35 +45,40 @@ async def dataset(eval: str = "test-match"):
 
 
 class RunRequest(BaseModel):
-    Input: Any
-    EndpointURL: str | None
+    input: Any
+    endpointURL: str | None
 
 
 @app.post("/run")
 async def run_model(request: RunRequest):
-    eval = str(request.Input["eval"])
-    del request.Input["eval"]
+    print(f"request: {request}")
+    eval = str(request.input["eval"])
+    del request.input["eval"]
 
-    print(f"endpointURL: {request.EndpointURL}")
+    print(f"endpointURL: {request.endpointURL}")
     print(f"eval: {eval}")
-    print(f"sample: {request.Input}")
+    print(f"sample: {request.input}")
 
     args = new_args(eval)
     fn = CompletionFnFake()
-    result = run(args, fn, request.Input)
+    result = run(args, fn, request.input)
 
     print(f"result: {result}")
+    clean_result = {
+            key: value for key,
+            value in result.items() if not math.isnan(value)
+            }
 
     try:
-        print(json.dumps(result, allow_nan=False))
+        print(json.dumps(clean_result, allow_nan=False))
         print("encoded")
-        return result
+        return clean_result
     except ValueError:
         return f"RESULT: {result}"
 
 
 @app.post("/assert")
-async def assert_response(data: Any):
+async def assert_response(data: Annotated[Any, Body(embedded=True)]):
     print(f"assert data: {data}")
     return {
         "result": "unimplemented",
