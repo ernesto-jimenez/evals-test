@@ -3,7 +3,7 @@ import logging
 import math
 import shlex
 import sys
-from typing import Annotated, Any, Mapping, Optional, Union
+from typing import Annotated, Any, Dict, Mapping, Optional, Union
 
 import evals
 import evals.api
@@ -44,24 +44,22 @@ async def dataset(eval: str = "test-match"):
     return {"data": inputs}
 
 
-class RunRequest(BaseModel):
-    input: Any
-    endpointURL: str | None
-
-
 @app.post("/run")
-async def run_model(request: RunRequest):
+async def run_model(request: Annotated[Dict[str, Any], Body(embedded=True)]):
     print(f"request: {request}")
-    eval = str(request.input["eval"])
-    del request.input["eval"]
+    eval = str(request["eval"])
+    del request["eval"]
 
-    print(f"endpointURL: {request.endpointURL}")
+    endpointURL = request.get("endpointURL", "")
+    sample = request
+
+    print(f"endpointURL: {endpointURL}")
     print(f"eval: {eval}")
-    print(f"sample: {request.input}")
+    print(f"sample: {sample}")
 
     args = new_args(eval)
     fn = CompletionFnFake()
-    result = run(args, fn, request.input)
+    result = run(args, fn, sample)
 
     print(f"result: {result}")
     clean_result = {
