@@ -16,7 +16,7 @@ terminate:
   {{unweave}} ls --json | jq -r '.[] | .id' | grep -v "null" | while read -r id; do yes | {{unweave}} terminate $id; done
 
 create-exec:
-  {{unweave}} exec --json --no-copy --port 8080 -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} --port 8080 -- pipenv run uvicorn unweave.main:app --port 8080 | jq -r .id > .exec_id
+  {{unweave}} exec --json --no-copy --port 8080 -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} --port 8080 -- pipenv run uvicorn unweave.main:app --port 8080 --host 0.0.0.0 | jq -r .id > .exec_id
 
 create-exec-with-image:
   {{unweave}} exec --json --no-copy --port 8080 -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} -- eval-server :8080 | jq -r .id > .exec_id
@@ -36,6 +36,9 @@ check-only:
   {{unweave}} endpoint check `cat .endpoint_id` --json | jq -r .checkID > .check_id
   cat .check_id
 
+wait-github:
+  gh run list --json databaseId,status,headSha | jq '.[] | select(.status=="in_progress") | .databaseId' | while read -r id; do gh run watch $id; done
+
 endpoints:
   {{unweave}} endpoint ls
 
@@ -46,7 +49,7 @@ ls *args:
   {{unweave}} ls {{args}}
 
 wait url:
-  while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' https://{{url}})" != "405" ]]; do echo "Waiting for server..."; sleep 5; done
+  while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' https://{{url}})" -gt "500" ]]; do echo "Waiting for server..."; sleep 5; done
 
 wait-endpoint:
   just wait `{{unweave}} endpoint ls --json | jq -r 'last.httpAddress'`

@@ -25,31 +25,6 @@ logger = logging.getLogger(__name__)
 def _purple(str: str) -> str:
     return f"\033[1;35m{str}\033[0m"
 
-
-def get_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run evals through the API")
-    parser.add_argument("eval", type=str, help="Name of an eval. See registry.", default="test-match")
-    parser.add_argument("--extra_eval_params", type=str, default="")
-    parser.add_argument("--max_samples", type=int, default=None)
-    parser.add_argument("--visible", action=argparse.BooleanOptionalAction, default=None)
-    parser.add_argument("--seed", type=int, default=20220722)
-    parser.add_argument("--user", type=str, default="")
-    parser.add_argument(
-        "--log_to_file", type=str, default=None, help="Log to a file instead of stdout"
-    )
-    parser.add_argument(
-        "--registry_path",
-        type=str,
-        default=None,
-        action="append",
-        help="Path to the registry",
-    )
-    parser.add_argument("--local-run", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--dry-run", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--dry-run-logging", action=argparse.BooleanOptionalAction, default=True)
-    return parser
-
-
 class OaiEvalArguments:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
@@ -193,7 +168,7 @@ async def startup_event():
 @app.get("/")
 async def manifest():
     return {
-            "runURL": "/",
+            "runURL": "/run",
             }
 
 @app.get("/dataset")
