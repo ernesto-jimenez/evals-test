@@ -1,10 +1,8 @@
-import argparse
 import logging
-import os
 import shlex
 import json
 import sys
-from typing import Any, Mapping, Optional, Union, cast, Dict
+from typing import Any, Mapping, Optional, Union
 
 import evals
 import evals.api
@@ -22,8 +20,88 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+app = FastAPI()
+
+# This is optional to configure a custom URL to run the model rather than
+# calling the endpoint directly
+
+
+@app.get("/")
+async def manifest():
+    return {
+        "runURL": "/run",
+    }
+
+
+@app.get("/dataset")
+async def dataset(eval: str = "test-match"):
+    args = new_args(eval)
+    fn = DummyCompletionFn()
+    samples = gather_samples(args, fn)
+    inputs = [{"input": sample} for sample in samples]
+    return {"data": inputs}
+
+
+class RunRequest(BaseModel):
+    Input: Any
+    EndpointURL: str | None
+
+
+@app.post("/run")
+async def run_model(request: RunRequest):
+    eval = str(request.Input["eval"])
+    del request.Input["eval"]
+
+    print(f"endpointURL: {request.EndpointURL}")
+    print(f"eval: {eval}")
+    print(f"sample: {request.Input}")
+
+    args = new_args(eval)
+    fn = CompletionFnFake()
+    result = run(args, fn, request.Input)
+
+    print(f"result: {result}")
+
+    try:
+        print(json.dumps(result, allow_nan=False))
+        print("encoded")
+        return result
+    except ValueError:
+        return f"RESULT: {result}"
+
+
+@app.post("/assert")
+async def assert_response(data: Any):
+    print(f"assert data: {data}")
+    return {
+        "result": "unimplemented",
+    }
+
+
+@app.on_event("startup")
+async def startup_event():
+    logging.basicConfig(
+        format="[%(asctime)s] [%(filename)s:%(lineno)d] %(message)s",
+        level=logging.INFO,
+    )
+
+
+class CompletionFnFake(CompletionFn):
+    def __init__(self):
+        self.prompts: list[dict[str, Any]] = []
+
+    def __call__(
+        self,
+        prompt: Union[str, Prompt, OpenAICreateChatPrompt, OpenAICreatePrompt],
+        **kwargs,
+    ) -> DummyCompletionResult:
+        self.prompts.append(prompt)
+        return DummyCompletionResult()
+
+
 def _purple(str: str) -> str:
     return f"\033[1;35m{str}\033[0m"
+
 
 class OaiEvalArguments:
     def __init__(self, **kwargs):
@@ -40,8 +118,13 @@ class OaiEvalArguments:
     dry_run: bool = False
     dry_run_logging: bool = True
 
-def setup(args: OaiEvalArguments, completion_fn: CompletionFn, registry: Optional[Registry] = None) -> (Eval, evals.record.RecorderBase):
-    visible = args.visible if args.visible is not None else (args.max_samples is None)
+
+def setup(args: OaiEvalArguments,
+          completion_fn: CompletionFn,
+          registry: Optional[Registry] = None) -> (Eval,
+                                                   evals.record.RecorderBase):
+    visible = args.visible if args.visible is not None else (
+        args.max_samples is None)
 
     if args.max_samples is not None:
         evals.eval.set_max_samples(args.max_samples)
@@ -54,7 +137,6 @@ def setup(args: OaiEvalArguments, completion_fn: CompletionFn, registry: Optiona
     assert (
         eval_spec is not None
     ), f"Eval {args.eval} not found. Available: {list(sorted(registry._evals.keys()))}"
-
 
     run_config = {
         "completion_fns": ["unweave"],
@@ -96,11 +178,11 @@ def setup(args: OaiEvalArguments, completion_fn: CompletionFn, registry: Optiona
         def to_number(x: str) -> Union[int, float, str]:
             try:
                 return int(x)
-            except:
+            except BaseException:
                 pass
             try:
                 return float(x)
-            except:
+            except BaseException:
                 pass
             return x
 
@@ -119,10 +201,15 @@ def setup(args: OaiEvalArguments, completion_fn: CompletionFn, registry: Optiona
     )
     return (eval, recorder)
 
-def gather_samples(args: OaiEvalArguments, completion_fn: CompletionFn, registry: Optional[Registry] = None) -> list[Any]:
+
+def gather_samples(
+        args: OaiEvalArguments,
+        completion_fn: CompletionFn,
+        registry: Optional[Registry] = None) -> list[Any]:
     eval, recorder = setup(args, completion_fn, registry)
     samples = list()
     # original_method = eval.eval_sample
+
     def other_method(sample, rand):
         samples.append({**sample, "eval": args.eval})
         # return original_method(sample, rand)
@@ -132,9 +219,15 @@ def gather_samples(args: OaiEvalArguments, completion_fn: CompletionFn, registry
 
     return samples
 
-def run(args: OaiEvalArguments, completion_fn: CompletionFn, sample: Any, registry: Optional[Registry] = None) -> Any:
+
+def run(
+        args: OaiEvalArguments,
+        completion_fn: CompletionFn,
+        sample: Any,
+        registry: Optional[Registry] = None) -> Any:
     eval, recorder = setup(args, completion_fn, registry)
     original_method = eval.eval_all_samples
+
     def stub(
         recorder: evals.record.RecorderBase,
         samples,
@@ -142,7 +235,11 @@ def run(args: OaiEvalArguments, completion_fn: CompletionFn, sample: Any, regist
         record_raw_sample=True,
         **_kwargs: Any,
     ):
-        return original_method(recorder, [sample], show_progress, record_raw_sample)
+        return original_method(
+            recorder,
+            [sample],
+            show_progress,
+            record_raw_sample)
 
     eval.eval_all_samples = stub
     result = eval.run(recorder)
@@ -150,76 +247,6 @@ def run(args: OaiEvalArguments, completion_fn: CompletionFn, sample: Any, regist
 
     return result
 
+
 def new_args(eval: str) -> OaiEvalArguments:
     return OaiEvalArguments(eval=eval)
-
-def init() -> None:
-    logging.basicConfig(
-        format="[%(asctime)s] [%(filename)s:%(lineno)d] %(message)s",
-        level=logging.INFO,
-    )
-
-app = FastAPI()
-
-@app.on_event("startup")
-async def startup_event():
-    init()
-
-@app.get("/")
-async def manifest():
-    return {
-            "runURL": "/run",
-            }
-
-@app.get("/dataset")
-async def dataset(eval: str = "test-match"):
-    args = new_args(eval)
-    fn = DummyCompletionFn()
-    samples = gather_samples(args, fn)
-    inputs = [{"input": sample} for sample in samples]
-    return { "data": inputs }
-
-class RunRequest(BaseModel):
-    Input: Any
-    EndpointURL: str | None
-
-@app.post("/run")
-async def run_model(request: RunRequest):
-    eval = str(request.Input["eval"])
-    del request.Input["eval"]
-
-    print(f"endpointURL: {request.EndpointURL}")
-    print(f"eval: {eval}")
-    print(f"sample: {request.Input}")
-
-    args = new_args(eval)
-    fn = CompletionFnFake()
-    result = run(args, fn, request.Input)
-
-    print(f"result: {result}")
-
-    try:
-        print(json.dumps(result, allow_nan=False))
-        print("encoded")
-        return result
-    except ValueError:
-        return f"RESULT: {result}"
-
-@app.post("/assert")
-async def assert_response(data: Any):
-    print(f"assert data: {data}")
-    return {
-            "result": "unimplemented",
-            }
-
-class CompletionFnFake(CompletionFn):
-    def __init__(self):
-        self.prompts: list[dict[str, Any]] = []
-
-    def __call__(
-        self,
-        prompt: Union[str, Prompt, OpenAICreateChatPrompt, OpenAICreatePrompt],
-        **kwargs,
-    ) -> DummyCompletionResult:
-        self.prompts.append(prompt)
-        return DummyCompletionResult()
