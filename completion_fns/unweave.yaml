@@ -1,4 +1,0 @@
-unweave:
-  class: unweave.completion_fn:UnweaveChatCompletionFn
-  args:
-    model: gpt-3.5-turbo

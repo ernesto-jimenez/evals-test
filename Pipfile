@@ -6,7 +6,7 @@ name = "pypi"
 [packages]
 evals = {editable = true, path = "./openai-evals"}
 fastapi = "*"
-uvicorn = {version = "*", extras = ["standard"]}
+uvicorn = "*"
 pydantic = "*"
 
 [dev-packages]
