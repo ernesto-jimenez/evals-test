@@ -16,10 +16,10 @@ terminate:
   {{unweave}} ls --json | jq -r '.[] | .id' | grep -v "null" | while read -r id; do yes | {{unweave}} terminate $id; done
 
 create-exec:
-  {{unweave}} exec --json --no-copy --port 8080 -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} --port 8080 -- pipenv run uvicorn unweave.main:app --port 8080 --host 0.0.0.0 | jq -r .id > .exec_id
+  {{unweave}} exec --json --no-copy -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} --port 8080 -- pipenv run uvicorn main:app --port 8080 --host 0.0.0.0 | jq -r .id > .exec_id
 
 create-endpoint:
-  {{unweave}} deploy --cmd "pipenv run uvicorn unweave.main:app" -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} --json | jq -r .endpoint.id > .endpoint_id
+  {{unweave}} deploy --cmd "pipenv run uvicorn main:app --port 8080 --host 0.0.0.0" -i ghcr.io/ernesto-jimenez/evals-test:{{tag}} --json | jq -r .endpoint.id > .endpoint_id
 
 create-eval: create-exec
   {{unweave}} eval new `cat .exec_id` --json | jq -r .id > .eval_id
